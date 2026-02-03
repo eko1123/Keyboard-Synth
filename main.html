@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Hello Web Audio</title>
+    </head>
+
+    <body>
+        <h1>Keyboard Synth</h1>
+        <button id="waveTypeButton">Change Wave Type: (currently sine)</button>
+        <h3>Temperament</h3>
+        <div>
+            <button class="temp" data-temp="et">Equal (12-TET)</button>
+            <button class="temp" data-temp="well">Well (Werckmeister III)</button>
+            <button class="temp" data-temp="ji">Pure (Just Intonation)</button>
+        </div>
+
+        <h3>Root note</h3>
+        <label id="rootContainer">
+            Root:
+            <select id="rootSelect"></select>
+        </label>
+        <p id="tuningStatus"></p>
+    </body>
+    <script src="keyboard.js"></script>
+</html>
