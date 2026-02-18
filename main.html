@@ -8,6 +8,41 @@
     <body>
         <h1>Keyboard Synth</h1>
         <button id="waveTypeButton">Change Wave Type: (currently sine)</button>
+        <h3>Synth Type</h3>
+        <div>
+            <select id="synthTypeSelect">
+                <option value="single">Single</option>
+                <option value="additive">Additive</option>
+                <option value="am">AM</option>
+                <option value="fm">FM</option>
+            </select>
+        </div>
+        <label id="additiveOptions" style="display: none;">
+                Additive options:
+                <select id="additiveSynthTypeSelect">
+                    <option value="odd">Odd</option>
+                    <option value="even">Even</option>
+                    <option value="all">All</option>
+                </select>
+        </label>
+        <label id="amContainer" style="display: none;">
+                AM options:
+                mod freq multiple
+                <input id="amFreq" type="range" min="0.1" max="20" value="2" step="0.1">
+                <span id="amFreqValue">2.0</span>
+                index multiple
+                <input id="amIndex" type="range" min="0" max="1" value="0.5" step="0.01">
+                <span id="amIndexValue">0.5</span>
+        </label>
+        <label id="fmContainer" style="display: none;">
+                FM options:
+                mod freq multiple
+                <input id="fmFreq" type="range" min="0.1" max="20" value="2" step="0.1">
+                <span id="fmFreqValue">2.0</span>
+                index multiple
+                <input id="fmIndex" type="range" min="0" max="20" value="2" step="0.1">
+                <span id="fmIndexValue">2.0</span>
+        </label>
         <h3>Temperament</h3>
         <div>
             <button class="temp" data-temp="et">Equal (12-TET)</button>

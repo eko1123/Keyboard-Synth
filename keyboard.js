@@ -36,6 +36,57 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const rootSelect = document.getElementById("rootSelect");
     const tuningStatus = document.getElementById("tuningStatus");
     const rootContainer = document.getElementById("rootContainer");
+    const synthType = document.getElementById("synthTypeSelect");
+    const additiveSynthTypeSelect = document.getElementById("additiveSynthTypeSelect");
+
+    const amContainer = document.getElementById("amContainer");
+    const fmContainer = document.getElementById("fmContainer");
+
+    const amFreq = document.getElementById("amFreq");
+    const amIndex = document.getElementById("amIndex");
+    const fmFreq = document.getElementById("fmFreq");
+    const fmIndex = document.getElementById("fmIndex");
+
+    const amFreqVal = document.getElementById("amFreqValue");
+    const amIndexVal = document.getElementById("amIndexValue");
+    const fmFreqVal = document.getElementById("fmFreqValue");
+    const fmIndexVal = document.getElementById("fmIndexValue");
+
+    function updateAmFmUI() {
+        amContainer.style.display = synthType.value === "am" ? "inline" : "none";
+        fmContainer.style.display = synthType.value === "fm" ? "inline" : "none";
+    }
+    function updateAmFmValues() {
+        amFreqVal.textContent = Number(amFreq.value).toFixed(1);
+        amIndexVal.textContent = Number(amIndex.value).toFixed(2);
+        fmFreqVal.textContent = Number(fmFreq.value).toFixed(1);
+        fmIndexVal.textContent = Number(fmIndex.value).toFixed(2);
+    }
+
+    synthType.addEventListener("change", () => {
+        updateAmFmUI();
+        updateAmFmValues();
+    });
+
+    [amFreq, amIndex, fmFreq, fmIndex].forEach(elem => {
+        elem.addEventListener("input", updateAmFmValues);
+    });
+
+    updateAmFmUI();
+    updateAmFmValues();
+
+    //if synth type is changed to additive, show options for different types of additive synthesis (odd, even, all partials, or presets like clarinet, flute, violin)
+    if (synthType && additiveSynthTypeSelect) { 
+        const additiveOptions = document.getElementById("additiveOptions"); 
+        additiveOptions.style.display = "none"; // hide by default
+        synthType.addEventListener("change", () => {
+            if (synthType.value === "additive") {
+                additiveOptions.style.display = "block";
+            } else {
+                additiveOptions.style.display = "none";
+            }
+        });
+    }
 
     //root note options
     if (rootSelect && tuningStatus && rootContainer) {
@@ -119,10 +170,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const waveTypes = ['sine', 'square', 'sawtooth', 'triangle'];
     let currentWaveTypeIndex = 0;
     const waveTypeButton = document.getElementById('waveTypeButton');
-    waveTypeButton.addEventListener('click', () => {
-        currentWaveTypeIndex = (currentWaveTypeIndex + 1) % waveTypes.length;
-        waveTypeButton.textContent = `Change Wave Type: (currently ${waveTypes[currentWaveTypeIndex]})`;
-    });
+    if (waveTypeButton) {
+        waveTypeButton.addEventListener('click', () => {
+            currentWaveTypeIndex = (currentWaveTypeIndex + 1) % waveTypes.length;
+            waveTypeButton.textContent = `Change Wave Type: (currently ${waveTypes[currentWaveTypeIndex]})`;
+        });
+    }
 
     // audio
 
@@ -134,6 +187,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     window.addEventListener('keyup', keyUp, false);
     const activeOscillators = {};
     const activeGainNodes = {};
+    const keyGainNodes = {}; // gain node for each key to control overall level of that key's oscillators
 
     function updateMasterGain() {
         const n = Object.keys(activeOscillators).length;
@@ -155,45 +209,202 @@ document.addEventListener("DOMContentLoaded", function(event) {
         if (keyToMidi[key] === undefined) return;
         if (activeOscillators[key]) {
             const now = audioCtx.currentTime;
-            const gainNode = activeGainNodes[key];
-            const osc = activeOscillators[key];
+            const gainNodes = activeGainNodes[key];
+            const oscs = activeOscillators[key];
+            const keyGainNode = keyGainNodes[key];
 
-            gainNode.gain.cancelScheduledValues(now);
-            gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.05); // release
+            keyGainNode.gain.cancelScheduledValues(now);
+            keyGainNode.gain.setValueAtTime(keyGainNode.gain.value, now);
+            keyGainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.05); // release
+            let endedCount = 0;
+            oscs.forEach((osc, index) => {
+                osc.stop(now + 0.06);
+                osc.onended = function() {
+                    endedCount ++;
+                    if (endedCount === oscs.length) {
+                        oscs.forEach((osc, index) => {
+                            osc.disconnect();
+                            gainNodes[index].disconnect();
+                        });
+                        keyGainNode.disconnect();
 
-            osc.stop(now + 0.06);
-            osc.onended = function() {
-                osc.disconnect();
-                gainNode.disconnect();
-                delete activeOscillators[key];
-                delete activeGainNodes[key];
-                updateMasterGain();
-            };
+                        delete activeOscillators[key];
+                        delete activeGainNodes[key];
+                        delete keyGainNodes[key];
+                        updateMasterGain();
+                    }
+                };
+            });
         }
     }
 
     function playNote(key) {
         // create oscillator
-        const osc = audioCtx.createOscillator();
         const freq = getFrequencyForKey(key);
         if (freq === undefined) return;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        osc.type = waveTypes[currentWaveTypeIndex];
-        // create gain node for envelope
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-        osc.connect(gainNode).connect(globalGain);
-        // store references to active oscillator and gain node
-        activeOscillators[key] = osc;
-        activeGainNodes[key] = gainNode;
+        const [oscs, gainNodes, keyGainNode] = createSynth(freq);
+        // store references to lists of oscillators and gain nodes for this key
+        activeOscillators[key] = oscs;
+        activeGainNodes[key] = gainNodes;
+        keyGainNodes[key] = keyGainNode;
         // adjust master gain based on number of active notes
         updateMasterGain();
         // start oscillator and apply envelope
-        osc.start();
-        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.01); // attack
-        gainNode.gain.setTargetAtTime(0.65, audioCtx.currentTime + 0.01, 0.05); // decay to sustain
+        oscs.forEach((osc, index) => {
+            osc.start();
+        });
+        keyGainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.01); // attack
+        keyGainNode.gain.setTargetAtTime(0.65, audioCtx.currentTime + 0.01, 0.05); // decay to sustain
     }
+
+    // function to choose what type of synth (single, additive, am, fm, etc) and return arrays of oscillators and gain nodes
+    // depends on current synth type selected by user
+    function createSynth(freq) {
+        const synthType = document.getElementById("synthTypeSelect").value;
+        const keyGainNode = audioCtx.createGain();
+        keyGainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        keyGainNode.connect(globalGain);
+        if (synthType === "single") {
+            //return two arrays, one of oscillators and one of gain nodes
+            return singleSynth(freq, keyGainNode);
+        } else if (synthType === "additive") {
+            const additiveSynthType = document.getElementById("additiveSynthTypeSelect").value;
+            let partialFreqs = [];
+            let partialAmps = [];
+            if (additiveSynthType === "odd") {
+                for (let i = 1; i <= 10; i += 1) {
+                    partialFreqs.push(freq * (2*i + 1));
+                    partialAmps.push(1 / (i+1))
+                }
+            } else if (additiveSynthType === "even") {
+                for (let i = 1; i <= 10; i += 1) {
+                    partialFreqs.push(freq * (2*i));
+                    partialAmps.push(1 / (i+1))
+                }
+            } else if (additiveSynthType === "all") {
+                for (let i = 1; i <= 10; i += 1) {
+                    partialFreqs.push(freq * (i+1));
+                    partialAmps.push(1 / (i+1))
+                }
+            }
+            return additiveSynth(freq, partialFreqs, partialAmps, keyGainNode);
+        } else if (synthType === "am") {
+            const modFreq = freq * Number(amFreq.value);
+            const modIndex = Number(amIndex.value);
+            return amSynth(freq, modFreq, modIndex, keyGainNode);
+        } else if (synthType === "fm") {
+            const modFreq = freq * Number(fmFreq.value);
+            const modIndex = Number(fmIndex.value);
+            return fmSynth(freq, modFreq, modIndex, keyGainNode);
+        }
+
+    }
+
+
+
+    // function to create and return an oscillator and gainNode for a given frequency
+    function singleSynth(freq, keyGainNode) {
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.type = waveTypes[currentWaveTypeIndex];
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+        osc.connect(gainNode).connect(keyGainNode);
+
+        return [[osc], [gainNode], keyGainNode];
+    }
+
+    function additiveSynth(carrierFreq, partialFreqs, partialAmps, keyGainNode) {
+        // carrier oscillator
+        const oscs = [];
+        const gainNodes = [];
+
+        let sumAmps = 1.0; // start with carrier amplitude
+        for (const a of partialAmps) {
+            sumAmps += a;
+        }
+        const headroom = 1;
+        const scale = headroom / sumAmps;
+
+        const carrierOsc = audioCtx.createOscillator();
+        carrierOsc.frequency.setValueAtTime(carrierFreq, audioCtx.currentTime);
+        carrierOsc.type = waveTypes[currentWaveTypeIndex];
+
+        // gain node for carrier
+        const carrierGain = audioCtx.createGain();
+        carrierGain.gain.setValueAtTime(1.0 * scale, audioCtx.currentTime);
+        carrierOsc.connect(carrierGain).connect(keyGainNode);
+
+        oscs.push(carrierOsc);
+        gainNodes.push(carrierGain);
+
+        // partial oscillators
+        for (let i = 0; i < partialFreqs.length; i++) {
+            const partialOsc = audioCtx.createOscillator();
+            partialOsc.frequency.setValueAtTime(partialFreqs[i], audioCtx.currentTime);
+            partialOsc.type = waveTypes[currentWaveTypeIndex];
+            const partialGain = audioCtx.createGain();
+            partialGain.gain.setValueAtTime(partialAmps[i] * scale, audioCtx.currentTime);
+            partialOsc.connect(partialGain).connect(keyGainNode);
+            oscs.push(partialOsc);
+            gainNodes.push(partialGain);
+        }
+        return [oscs, gainNodes, keyGainNode];
+    }
+
+    function amSynth(carrierFreq, modFreq, modIndex, keyGainNode) {
+        const oscs = [];
+        const gainNodes = [];
+        
+        const carrierOsc = audioCtx.createOscillator();
+        carrierOsc.frequency.setValueAtTime(carrierFreq, audioCtx.currentTime);
+        carrierOsc.type = waveTypes[currentWaveTypeIndex];
+
+        const carrierGain = audioCtx.createGain();
+        carrierGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+        carrierOsc.connect(carrierGain).connect(keyGainNode);
+
+        const modOsc = audioCtx.createOscillator();
+        modOsc.frequency.setValueAtTime(modFreq, audioCtx.currentTime);
+        modOsc.type = 'sine';
+
+        const modGain = audioCtx.createGain();
+        modGain.gain.setValueAtTime(modIndex * carrierFreq / modFreq, audioCtx.currentTime);
+        modOsc.connect(modGain);
+        modGain.connect(carrierGain.gain);
+
+        oscs.push(carrierOsc, modOsc);
+        gainNodes.push(carrierGain, modGain);
+        return [oscs, gainNodes, keyGainNode];
+    }
+
+    function fmSynth(carrierFreq, modFreq, modIndex, keyGainNode) {
+        const oscs = [];
+        const gainNodes = [];
+
+        const carrierOsc = audioCtx.createOscillator();
+        carrierOsc.frequency.setValueAtTime(carrierFreq, audioCtx.currentTime);
+        carrierOsc.type = waveTypes[currentWaveTypeIndex];
+
+        const carrierGain = audioCtx.createGain();
+        carrierGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+        carrierOsc.connect(carrierGain).connect(keyGainNode);
+
+        const modOsc = audioCtx.createOscillator();
+        modOsc.frequency.setValueAtTime(modFreq, audioCtx.currentTime);
+        modOsc.type = 'sine';
+
+        const modGain = audioCtx.createGain();
+        modGain.gain.setValueAtTime(modIndex * modFreq, audioCtx.currentTime);
+        modOsc.connect(modGain);
+        modGain.connect(carrierOsc.frequency);
+
+        oscs.push(carrierOsc, modOsc);
+        gainNodes.push(carrierGain, modGain);
+        return [oscs, gainNodes, keyGainNode];
+    }
+
 
 });
 
