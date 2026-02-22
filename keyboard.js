@@ -75,6 +75,57 @@ document.addEventListener("DOMContentLoaded", function(event) {
     updateAmFmUI();
     updateAmFmValues();
 
+    //change LFO UI text based on whether it's on or off
+    const lfoButton = document.getElementById('lfoButton');
+    const lfoContainer = document.getElementById('lfoContainer');
+    const lfoFreqSlider = document.getElementById('lfoFreq');
+    const lfoDepthSlider = document.getElementById('lfoDepth');
+    const lfoFreq = Number(lfoFreqSlider.value);
+    const lfoDepth = Number(lfoDepthSlider.value);
+
+    let lfoOn = false;
+    let lfoOscillator = audioCtx.createOscillator();
+    let lfoGain = audioCtx.createGain();
+    let tremoloGain = audioCtx.createGain();
+    tremoloGain.gain.setValueAtTime(1, audioCtx.currentTime);
+    tremoloGain.connect(audioCtx.destination);
+
+    lfoOscillator.type = 'sine';
+    lfoOscillator.frequency.setValueAtTime(Number(lfoFreqSlider.value), audioCtx.currentTime);
+    lfoGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    lfoOscillator.connect(lfoGain).connect(tremoloGain.gain);
+    lfoOscillator.start();
+
+    if (lfoButton && lfoContainer && lfoFreqSlider && lfoDepthSlider) {
+        lfoButton.addEventListener('click', () => {
+            lfoOn = !lfoOn;
+            lfoContainer.style.display = lfoOn ? 'inline' : 'none';
+            lfoButton.textContent = `Toggle LFO: (currently ${lfoOn ? 'on' : 'off'})`;
+            setLFO();
+        });
+        lfoDepthSlider.addEventListener('input', () => {
+            if (lfoOn) {
+                lfoGain.gain.setValueAtTime(Number(lfoDepthSlider.value), audioCtx.currentTime);
+            }
+        });
+        lfoFreqSlider.addEventListener('input', () => {
+            if (lfoOn) {
+                lfoOscillator.frequency.setValueAtTime(Number(lfoFreqSlider.value), audioCtx.currentTime);
+            }
+        });
+    }
+
+    function setLFO() {
+        if (lfoOn) {
+            let lfoFreq = Number(lfoFreqSlider.value);
+            let lfoDepth = Number(lfoDepthSlider.value);
+            lfoOscillator.frequency.setValueAtTime(lfoFreq, audioCtx.currentTime);
+            lfoGain.gain.setValueAtTime(lfoDepth, audioCtx.currentTime);
+        } else {
+            lfoGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        }
+    }
+
     //if synth type is changed to additive, show options for different types of additive synthesis (odd, even, all partials, or presets like clarinet, flute, violin)
     if (synthType && additiveSynthTypeSelect) { 
         const additiveOptions = document.getElementById("additiveOptions"); 
@@ -181,7 +232,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
     const globalGain = audioCtx.createGain();
     globalGain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    globalGain.connect(audioCtx.destination);
+    globalGain.connect(tremoloGain);
 
     window.addEventListener('keydown', keyDown, false);
     window.addEventListener('keyup', keyUp, false);

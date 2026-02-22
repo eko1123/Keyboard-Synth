@@ -8,6 +8,13 @@
     <body>
         <h1>Keyboard Synth</h1>
         <button id="waveTypeButton">Change Wave Type: (currently sine)</button>
+        <button id="lfoButton">Toggle LFO: (currently off)</button>
+        <label id="lfoContainer" style="display: none;">
+            LFO frequency:
+            <input id="lfoFreq" type="range" min="0" max="20" value="5" step="0.1">
+            LFO depth:
+            <input id="lfoDepth" type="range" min="0" max="0.5" value="0.5" step="0.01">
+        </label>
         <h3>Synth Type</h3>
         <div>
             <select id="synthTypeSelect">
