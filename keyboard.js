@@ -265,8 +265,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
             const keyGainNode = keyGainNodes[key];
 
             keyGainNode.gain.cancelScheduledValues(now);
-            keyGainNode.gain.setValueAtTime(keyGainNode.gain.value, now);
-            keyGainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.05); // release
+            const currentGain = Math.max(keyGainNode.gain.value, 0.0001);
+            keyGainNode.gain.setValueAtTime(currentGain, now);
+            keyGainNode.gain.linearRampToValueAtTime(0, now + 0.05); // release
             let endedCount = 0;
             oscs.forEach((osc, index) => {
                 osc.stop(now + 0.06);
